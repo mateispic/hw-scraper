@@ -2,7 +2,7 @@ name: Hot Wheels Scraper
 
 on:
   schedule:
-    - cron: "0 */6 * * *"  # la fiecare 6 ore
+    - cron: "0 * * * *"   # la fiecare oră
   workflow_dispatch:         # buton de run manual pe GitHub
 
 jobs:
