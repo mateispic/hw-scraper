@@ -35,12 +35,24 @@ def get_existing_links():
 def insert_products(products):
     if not products:
         return
-    r = requests.post(
-        f"{SUPABASE_URL}/rest/v1/products",
-        headers=HEADERS,
-        json=products
-    )
-    r.raise_for_status()
+    inserted = 0
+    seen_links = set()
+    for p in products:
+        if p["link"] in seen_links:
+            continue
+        seen_links.add(p["link"])
+        r = requests.post(
+            f"{SUPABASE_URL}/rest/v1/products",
+            headers=HEADERS,
+            json=p
+        )
+        if r.status_code in (200, 201):
+            inserted += 1
+        elif r.status_code == 409:
+            pass  # link deja existent, ignorăm
+        else:
+            print(f"⚠️ Eroare la inserare {p['link']}: {r.status_code}")
+    print(f"✅ Inserate în Supabase: {inserted}")
 
 # ------------------------------------
 # Email
