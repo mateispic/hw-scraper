@@ -80,7 +80,7 @@ def send_email(new_products):
             </p>
 
             <p style="margin:0 0 12px;font-size:16px;font-weight:700;color:#111;">
-                {p['price']} Lei
+                {p['price']}
             </p>
 
             <a href="{p['link']}"
