@@ -175,10 +175,10 @@ def fetch_smyk(scraper, page=1):
     for item in soup.select("div.complex-product"):
         title_el = item.select_one("div.complex-product__name")
         price_el = item.select_one("span.price--new")
-        link_el = item.find_parent("a", href=True)
-        if not title_el:
+        link_el = item.select_one("a[data-testid='link-wrapper'][href]")
+        if not title_el or not link_el:
             continue
-        link = link_el["href"] if link_el else "https://smyk.ro"
+        link = link_el["href"]
         if link.startswith("/"):
             link = "https://smyk.ro" + link
         price = price_el.get_text(strip=True).replace("Lei", "").strip() if price_el else "N/A"
