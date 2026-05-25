@@ -139,12 +139,14 @@ def fetch_noriel(scraper, page=1):
         title_el = item.select_one("h2.product-item-name")
         link_el = item.select_one("a[href]")
         price_el = item.select_one("span.price")
+        img_el = item.select_one("img.product-image-photo")
         if title_el and link_el:
             products.append({
                 "title": title_el.get_text(strip=True),
                 "link": link_el["href"],
                 "price": price_el.get_text(strip=True) if price_el else "N/A",
-                "source": "Noriel"
+                "source": "Noriel",
+                "image_url": img_el["src"] if img_el else None
             })
     return products
 
@@ -176,17 +178,22 @@ def fetch_smyk(scraper, page=1):
         title_el = item.select_one("div.complex-product__name")
         price_el = item.select_one("span.price--new")
         link_el = item.select_one("a[data-testid='link-wrapper'][href]")
+        img_el = item.select_one("img[data-src]") or item.select_one("img[src]")
         if not title_el or not link_el:
             continue
         link = link_el["href"]
         if link.startswith("/"):
             link = "https://smyk.ro" + link
         price = price_el.get_text(strip=True).replace("Lei", "").strip() if price_el else "N/A"
+        image_url = None
+        if img_el:
+            image_url = img_el.get("data-src") or img_el.get("src")
         products.append({
             "title": title_el.get_text(strip=True),
             "price": price,
             "link": link,
-            "source": "Smyk"
+            "source": "Smyk",
+            "image_url": image_url
         })
     return products
 
