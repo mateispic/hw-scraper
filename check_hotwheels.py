@@ -103,7 +103,7 @@ def send_email(new_products):
 
         <!-- Header -->
         <div style="margin-bottom:24px;">
-            <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1px;">Hot Wheels Tracker</p>
+            <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1px;">Hot Wheels Scraper</p>
             <h1 style="margin:0;font-size:22px;font-weight:700;color:#111;">{subject_text} pe stoc</h1>
         </div>
 
@@ -126,9 +126,9 @@ def send_email(new_products):
             "Content-Type": "application/json"
         },
         json={
-            "from": "Hot Wheels Tracker <onboarding@resend.dev>",
+            "from": "Hot Wheels Scraper <onboarding@resend.dev>",
             "to": NOTIFY_EMAIL,
-            "subject": f"Hot Wheels Alert • {subject_text}",
+            "subject": f"HW Alert • {subject_text}",
             "html": html
         }
     )
