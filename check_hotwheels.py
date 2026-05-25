@@ -51,8 +51,8 @@ def insert_products(products):
         elif r.status_code == 409:
             pass  # link deja existent, ignorăm
         else:
-            print(f"⚠️ Eroare la inserare {p['link']}: {r.status_code}")
-    print(f"✅ Inserate în Supabase: {inserted}")
+            print(f"Eroare la inserare {p['link']}: {r.status_code}")
+    print(f"Inserate în Supabase: {inserted}")
 
 # ------------------------------------
 # Email
@@ -64,65 +64,60 @@ def send_email(new_products):
 
     cards = ""
     for p in new_products:
-        image_block = ""
-        if p.get("image_url"):
-            image_block = f"""
-            <div style="width:120px;flex-shrink:0;background:#f5f5f5;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
-                <img src="{p['image_url']}" alt="{p['title']}" width="120" height="120"
-                     style="object-fit:contain;display:block;" />
-            </div>"""
-        else:
-            image_block = """
-            <div style="width:120px;flex-shrink:0;background:#f5f5f5;border-radius:8px;display:flex;align-items:center;justify-content:center;">
-                <span style="font-size:36px;">&#128663;</span>
-            </div>"""
-
         source_color = "#0077cc" if p["source"] == "Noriel" else "#cc5500"
 
         cards += f"""
-        <div style="display:flex;gap:16px;background:#ffffff;border:1px solid #ebebeb;border-radius:12px;padding:16px;margin-bottom:12px;">
-            {image_block}
-            <div style="flex:1;min-width:0;">
-                <div style="margin-bottom:6px;">
-                    <span style="font-size:11px;font-weight:600;color:{source_color};text-transform:uppercase;letter-spacing:0.5px;">{p['source']}</span>
-                </div>
-                <p style="margin:0 0 8px;font-size:14px;font-weight:500;color:#111;line-height:1.4;">{p['title']}</p>
-                <p style="margin:0 0 12px;font-size:16px;font-weight:700;color:#111;">{p['price']}</p>
-                <a href="{p['link']}"
-                   style="display:inline-block;padding:7px 16px;background:#111;color:#fff;text-decoration:none;border-radius:6px;font-size:12px;font-weight:500;">
-                    Vezi produs
-                </a>
+        <div style="background:#ffffff;border:1px solid #ebebeb;border-radius:12px;padding:16px;margin-bottom:12px;">
+
+            <div style="margin-bottom:6px;">
+                <span style="font-size:11px;font-weight:600;color:{source_color};text-transform:uppercase;letter-spacing:0.5px;">
+                    {p['source']}
+                </span>
             </div>
-        </div>"""
+
+            <p style="margin:0 0 8px;font-size:14px;font-weight:500;color:#111;line-height:1.4;">
+                {p['title']}
+            </p>
+
+            <p style="margin:0 0 12px;font-size:16px;font-weight:700;color:#111;">
+                {p['price']} Lei
+            </p>
+
+            <a href="{p['link']}"
+            style="display:inline-block;padding:7px 16px;background:#111;color:#fff;text-decoration:none;border-radius:6px;font-size:12px;font-weight:500;">
+                Vezi produs
+            </a>
+
+        </div>
+        """
 
     subject_text = f"{len(new_products)} produse noi"
     if len(new_products) == 1:
         subject_text = "1 produs nou"
 
     html = f"""<!DOCTYPE html>
-<html lang="ro">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="max-width:560px;margin:40px auto;padding:0 16px 40px;">
+    <html lang="ro">
+    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+    <div style="max-width:560px;margin:40px auto;padding:0 16px 40px;">
 
-    <!-- Header -->
-    <div style="margin-bottom:24px;">
-        <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1px;">Hot Wheels Tracker</p>
-        <h1 style="margin:0;font-size:22px;font-weight:700;color:#111;">{subject_text} pe stoc</h1>
-        <p style="margin:8px 0 0;font-size:14px;color:#666;">{datetime.now().strftime("%d %B %Y, %H:%M")}</p>
+        <!-- Header -->
+        <div style="margin-bottom:24px;">
+            <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:1px;">Hot Wheels Tracker</p>
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#111;">{subject_text} pe stoc</h1>
+        </div>
+
+        <!-- Cards -->
+        {cards}
+
+        <!-- Footer -->
+        <p style="margin:8px 0 0;font-size:14px;color:#666;">
+            Produse detectate automat din Noriel și Smyk
+        </p>
+
     </div>
-
-    <!-- Cards -->
-    {cards}
-
-    <!-- Footer -->
-    <p style="margin-top:24px;font-size:12px;color:#bbb;text-align:center;">
-        Notificare automata — verificare la fiecare 6 ore
-    </p>
-
-  </div>
-</body>
-</html>"""
+    </body>
+    </html>"""
 
     r = requests.post(
         "https://api.resend.com/emails",
@@ -133,15 +128,15 @@ def send_email(new_products):
         json={
             "from": "Hot Wheels Tracker <onboarding@resend.dev>",
             "to": NOTIFY_EMAIL,
-            "subject": f"Hot Wheels — {subject_text} detectate",
+            "subject": f"Hot Wheels Alert • {subject_text}",
             "html": html
         }
     )
 
     if r.status_code == 200:
-        print(f"✅ Email trimis la {NOTIFY_EMAIL}")
+        print(f"Email trimis la {NOTIFY_EMAIL}")
     else:
-        print(f"❌ Eroare email: {r.text}")
+        print(f"Eroare email: {r.text}")
 
 # ------------------------------------
 # Noriel
@@ -265,7 +260,7 @@ def main():
 
     if new_products:
         insert_products(new_products)
-        print(f"✅ Salvate în Supabase: {len(new_products)}")
+        print(f"Salvate în Supabase: {len(new_products)}")
         send_email(new_products)
     else:
         print("Nicio noutate.")
