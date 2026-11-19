@@ -28,7 +28,10 @@ load_dotenv()
 
 REQUIRED_ENV = ["SUPABASE_URL", "SUPABASE_SERVICE_KEY", "RESEND_API_KEY", "NOTIFY_EMAIL"]
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+# acceptă și URL-ul copiat cu /rest/v1 la final; păstrăm doar baza proiectului
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+if SUPABASE_URL.endswith("/rest/v1"):
+    SUPABASE_URL = SUPABASE_URL[: -len("/rest/v1")]
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 NOTIFY_EMAIL = os.environ.get("NOTIFY_EMAIL", "")
