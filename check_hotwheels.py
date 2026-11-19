@@ -1,10 +1,9 @@
-import cloudscraper
-from bs4 import BeautifulSoup
-from datetime import datetime
 import argparse
 import os
 import sys
 import requests
+
+import scrapers
 
 # ------------------------------------
 # Config din environment variables
@@ -143,145 +142,16 @@ def send_email(new_products):
         print(f"Eroare email: {r.text}")
 
 # ------------------------------------
-# Noriel
-# ------------------------------------
-
-def get_total_pages_noriel(scraper):
-    url = "https://noriel.ro/catalogsearch/result/index/?p=1&q=hot+wheels"
-    r = scraper.get(url)
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
-    el = soup.select_one("span.toolbar-number")
-    if el:
-        try:
-            return int(el.get_text().split("/")[-1].strip())
-        except:
-            return 1
-    return 1
-
-def fetch_noriel(scraper, page=1):
-    url = f"https://noriel.ro/catalogsearch/result/index/?p={page}&q=hot+wheels"
-    r = scraper.get(url)
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
-
-    products = []
-    for item in soup.select("div.product-item"):
-        title_el = item.select_one("h2.product-item-name")
-        link_el = item.select_one("a[href]")
-        price_el = item.select_one("span.price")
-        img_el = item.select_one("img.product-image-photo")
-        if title_el and link_el:
-            products.append({
-                "title": " ".join(title_el.get_text(" ", strip=True).split()),
-                "link": link_el["href"],
-                "price": price_el.get_text(strip=True) if price_el else "N/A",
-                "source": "Noriel",
-                "image_url": img_el["src"] if img_el else None
-            })
-    if not products:
-        raise_empty_page(r, soup, len(soup.select("div.product-item")))
-    return products
-
-# ------------------------------------
-# Smyk
-# ------------------------------------
-
-def get_total_pages_smyk(scraper):
-    url = "https://smyk.ro/jocuri-si-jucarii/masinute-si-vehicule/masinute,030802.html?mark=Hot%20Wheels&p=1"
-    r = scraper.get(url)
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
-    pages = soup.select("ul.pagination li a.pagination__number")
-    if pages:
-        try:
-            return int(pages[-1].get_text(strip=True))
-        except:
-            return 1
-    return 1
-
-def fetch_smyk(scraper, page=1):
-    url = f"https://smyk.ro/jocuri-si-jucarii/masinute-si-vehicule/masinute,030802.html?mark=Hot%20Wheels&p={page}"
-    r = scraper.get(url)
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "html.parser")
-
-    products = []
-    for item in soup.select("div.complex-product"):
-        title_el = item.select_one("div.complex-product__name")
-        price_el = item.select_one("span.price--new")
-        # unele carduri au un link promo (ex. Black Friday) înaintea celui de produs;
-        # luăm doar linkuri spre pagina produsului (/p/...)
-        link_el = (item.select_one("a[data-testid='link-wrapper'][href*='/p/']")
-                   or item.select_one("a[href*='/p/']"))
-        img_el = item.select_one("img[data-src]") or item.select_one("img[src]")
-        if not title_el or not link_el:
-            continue
-        link = link_el["href"]
-        if link.startswith("/"):
-            link = "https://smyk.ro" + link
-        price = price_el.get_text(strip=True).replace("Lei", "").strip() if price_el else "N/A"
-        image_url = None
-        if img_el:
-            image_url = img_el.get("data-src") or img_el.get("src")
-        products.append({
-            "title": " ".join(title_el.get_text(" ", strip=True).split()),
-            "price": price,
-            "link": link,
-            "source": "Smyk",
-            "image_url": image_url
-        })
-    if not products:
-        raise_empty_page(r, soup, len(soup.select("div.complex-product")))
-    return products
-
-def raise_empty_page(r, soup, cards_found):
-    """Pagina a venit cu 200 dar fără produse: probabil blocare, redirect sau HTML schimbat."""
-    title = soup.title.get_text(strip=True) if soup.title else None
-    print(f"  0 produse | status: {r.status_code} | url final: {r.url}")
-    print(f"  titlu pagină: {title!r} | carduri găsite: {cards_found} | server: {r.headers.get('server')}")
-    if r.history:
-        print(f"  redirecturi: {' -> '.join(h.headers.get('location', '?') for h in r.history)}")
-    print(f"  început HTML: {r.text[:300]!r}")
-    raise RuntimeError("0 produse pe pagină (vezi detaliile de mai sus)")
-
-# ------------------------------------
 # Main
 # ------------------------------------
-
-def scrape_site(scraper, fetch_func, get_pages_func, site_name, max_pages=None):
-    print(f"\n=== {site_name} ===")
-    total_pages = get_pages_func(scraper)
-    print(f"Pagini găsite: {total_pages}")
-    if max_pages:
-        total_pages = min(total_pages, max_pages)
-
-    products = []
-    for page in range(1, total_pages + 1):
-        print(f"Pagina {page}...")
-        products.extend(fetch_func(scraper, page))
-
-    print(f"Total produse {site_name}: {len(products)}")
-    return products
-
-def new_scraper():
-    return cloudscraper.create_scraper(browser={
-        "browser": "chrome",
-        "platform": "windows",
-        "mobile": False
-    })
-
-SITES = [
-    (fetch_smyk, get_total_pages_smyk, "Smyk"),
-    (fetch_noriel, get_total_pages_noriel, "Noriel"),
-]
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Hot Wheels scraper")
     parser.add_argument("--dry-run", action="store_true",
                         help="doar scrape + afișare; nu atinge Supabase și nu trimite email")
-    parser.add_argument("--site", choices=[name.lower() for _, _, name in SITES],
-                        help="rulează un singur site")
+    parser.add_argument("--site", action="append", choices=list(scrapers.ALL),
+                        help="rulează doar scraperul ăsta (se poate repeta); "
+                             f"implicit: {', '.join(scrapers.DEFAULT) or 'niciunul'}")
     parser.add_argument("--max-pages", type=int,
                         help="limitează numărul de pagini per site")
     return parser.parse_args()
@@ -300,15 +170,26 @@ def main():
         existing_links = get_existing_links()
         print(f"Produse existente în DB: {len(existing_links)}")
 
-    sites = [s for s in SITES if not args.site or s[2].lower() == args.site]
+    # ordinea de prioritate: --site, apoi variabila SCRAPERS, apoi cele activate în registry
+    env_sites = [s.strip() for s in os.environ.get("SCRAPERS", "").split(",") if s.strip()]
+    selected = args.site or env_sites or scrapers.DEFAULT
+    unknown = [s for s in selected if s not in scrapers.ALL]
+    if unknown:
+        sys.exit(f"Scrapere necunoscute: {', '.join(unknown)} (disponibile: {', '.join(scrapers.ALL)})")
+    if not selected:
+        print("Niciun scraper activat (vezi scrapers/__init__.py).")
+        return
+    print(f"Scrapere: {', '.join(selected)}")
 
     all_products = []
     failed_sites = []
-    for fetch_func, get_pages_func, site_name in sites:
+    for site_name in selected:
+        module = scrapers.ALL[site_name]
+        print(f"\n=== {site_name} ===")
         try:
-            # sesiune separată per site, ca problemele unuia să nu-l afecteze pe celălalt
-            all_products.extend(scrape_site(new_scraper(), fetch_func, get_pages_func,
-                                            site_name, args.max_pages))
+            products = module.scrape(args.max_pages)
+            print(f"Total produse {site_name}: {len(products)}")
+            all_products.extend(products)
         except Exception as e:
             failed_sites.append(site_name)
             print(f"::warning::{site_name} a eșuat, trec mai departe: {e}")
