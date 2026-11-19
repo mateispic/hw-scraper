@@ -1,17 +1,21 @@
 import cloudscraper
 from bs4 import BeautifulSoup
 from datetime import datetime
+import argparse
 import os
+import sys
 import requests
 
 # ------------------------------------
 # Config din environment variables
 # ------------------------------------
 
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
-RESEND_API_KEY = os.environ["RESEND_API_KEY"]
-NOTIFY_EMAIL = os.environ["NOTIFY_EMAIL"]
+REQUIRED_ENV = ["SUPABASE_URL", "SUPABASE_SERVICE_KEY", "RESEND_API_KEY", "NOTIFY_EMAIL"]
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+NOTIFY_EMAIL = os.environ.get("NOTIFY_EMAIL", "")
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
@@ -169,7 +173,7 @@ def fetch_noriel(scraper, page=1):
         img_el = item.select_one("img.product-image-photo")
         if title_el and link_el:
             products.append({
-                "title": title_el.get_text(strip=True),
+                "title": " ".join(title_el.get_text(" ", strip=True).split()),
                 "link": link_el["href"],
                 "price": price_el.get_text(strip=True) if price_el else "N/A",
                 "source": "Noriel",
@@ -204,7 +208,10 @@ def fetch_smyk(scraper, page=1):
     for item in soup.select("div.complex-product"):
         title_el = item.select_one("div.complex-product__name")
         price_el = item.select_one("span.price--new")
-        link_el = item.select_one("a[data-testid='link-wrapper'][href]")
+        # unele carduri au un link promo (ex. Black Friday) înaintea celui de produs;
+        # luăm doar linkuri spre pagina produsului (/p/...)
+        link_el = (item.select_one("a[data-testid='link-wrapper'][href*='/p/']")
+                   or item.select_one("a[href*='/p/']"))
         img_el = item.select_one("img[data-src]") or item.select_one("img[src]")
         if not title_el or not link_el:
             continue
@@ -216,7 +223,7 @@ def fetch_smyk(scraper, page=1):
         if img_el:
             image_url = img_el.get("data-src") or img_el.get("src")
         products.append({
-            "title": title_el.get_text(strip=True),
+            "title": " ".join(title_el.get_text(" ", strip=True).split()),
             "price": price,
             "link": link,
             "source": "Smyk",
@@ -228,10 +235,12 @@ def fetch_smyk(scraper, page=1):
 # Main
 # ------------------------------------
 
-def scrape_site(scraper, fetch_func, get_pages_func, site_name):
+def scrape_site(scraper, fetch_func, get_pages_func, site_name, max_pages=None):
     print(f"\n=== {site_name} ===")
     total_pages = get_pages_func(scraper)
     print(f"Pagini găsite: {total_pages}")
+    if max_pages:
+        total_pages = min(total_pages, max_pages)
 
     products = []
     for page in range(1, total_pages + 1):
@@ -241,19 +250,69 @@ def scrape_site(scraper, fetch_func, get_pages_func, site_name):
     print(f"Total produse {site_name}: {len(products)}")
     return products
 
-def main():
-    scraper = cloudscraper.create_scraper(browser={
+def new_scraper():
+    return cloudscraper.create_scraper(browser={
         "browser": "chrome",
         "platform": "windows",
         "mobile": False
     })
 
-    existing_links = get_existing_links()
-    print(f"Produse existente în DB: {len(existing_links)}")
+SITES = [
+    (fetch_smyk, get_total_pages_smyk, "Smyk"),
+    (fetch_noriel, get_total_pages_noriel, "Noriel"),
+]
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Hot Wheels scraper")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="doar scrape + afișare; nu atinge Supabase și nu trimite email")
+    parser.add_argument("--site", choices=[name.lower() for _, _, name in SITES],
+                        help="rulează un singur site")
+    parser.add_argument("--max-pages", type=int,
+                        help="limitează numărul de pagini per site")
+    return parser.parse_args()
+
+def main():
+    args = parse_args()
+    dry_run = args.dry_run or os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes")
+
+    if dry_run:
+        print("*** DRY RUN: fără Supabase, fără email ***")
+        existing_links = set()
+    else:
+        missing = [k for k in REQUIRED_ENV if not os.environ.get(k)]
+        if missing:
+            sys.exit(f"Lipsesc variabilele de mediu: {', '.join(missing)} (folosește --dry-run pentru test)")
+        existing_links = get_existing_links()
+        print(f"Produse existente în DB: {len(existing_links)}")
+
+    sites = [s for s in SITES if not args.site or s[2].lower() == args.site]
 
     all_products = []
-    all_products.extend(scrape_site(scraper, fetch_noriel, get_total_pages_noriel, "Noriel"))
-    all_products.extend(scrape_site(scraper, fetch_smyk, get_total_pages_smyk, "Smyk"))
+    failed_sites = []
+    for fetch_func, get_pages_func, site_name in sites:
+        try:
+            # sesiune separată per site, ca problemele unuia să nu-l afecteze pe celălalt
+            all_products.extend(scrape_site(new_scraper(), fetch_func, get_pages_func,
+                                            site_name, args.max_pages))
+        except Exception as e:
+            failed_sites.append(site_name)
+            print(f"::warning::{site_name} a eșuat, trec mai departe: {e}")
+            resp = getattr(e, "response", None)
+            if resp is not None:
+                print(f"  server: {resp.headers.get('server')} | cf-ray: {resp.headers.get('cf-ray')}")
+                print(f"  răspuns: {resp.text[:300]!r}")
+
+    if dry_run:
+        print(f"\nTotal produse găsite: {len(all_products)}")
+        for p in all_products[:10]:
+            print(f"  [{p['source']}] {p['title']} | {p['price']} | {p['link']}")
+        if len(all_products) > 10:
+            print(f"  ... și încă {len(all_products) - 10}")
+        if failed_sites:
+            print(f"\nSite-uri eșuate: {', '.join(failed_sites)}")
+            sys.exit(1)
+        return
 
     new_products = [p for p in all_products if p["link"] not in existing_links]
     print(f"\nProduse noi găsite: {len(new_products)}")
@@ -264,6 +323,10 @@ def main():
         send_email(new_products)
     else:
         print("Nicio noutate.")
+
+    if failed_sites:
+        print(f"\nSite-uri eșuate: {', '.join(failed_sites)}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

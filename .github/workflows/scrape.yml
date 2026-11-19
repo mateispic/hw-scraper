@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 * * * *"   # la fiecare oră
   workflow_dispatch:         # buton de run manual pe GitHub
+    inputs:
+      dry_run:
+        description: "Dry run (fără Supabase și email)"
+        type: boolean
+        default: false
 
 jobs:
   scrape:
@@ -27,4 +32,5 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: python check_hotwheels.py
