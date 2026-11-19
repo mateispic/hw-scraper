@@ -9,6 +9,23 @@ import scrapers
 # Config din environment variables
 # ------------------------------------
 
+def load_dotenv(path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")):
+    """Citește KEY=valoare din .env de lângă script (ex. pe telefon, în Pydroid).
+
+    Variabilele deja setate (ex. secretele din GitHub Actions) au prioritate.
+    """
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+load_dotenv()
+
 REQUIRED_ENV = ["SUPABASE_URL", "SUPABASE_SERVICE_KEY", "RESEND_API_KEY", "NOTIFY_EMAIL"]
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
