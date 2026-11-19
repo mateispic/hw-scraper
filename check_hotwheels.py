@@ -177,9 +177,13 @@ def main():
     args = parse_args()
     dry_run = args.dry_run or os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes")
 
+    existing_links = None
     if dry_run:
-        print("*** DRY RUN: fără Supabase, fără email ***")
-        existing_links = set()
+        print("*** DRY RUN: nu scrie în Supabase, nu trimite email ***")
+        if SUPABASE_URL and SUPABASE_KEY:
+            # doar citire, ca să vedem ce produse AR FI noi
+            existing_links = get_existing_links()
+            print(f"Produse existente în DB: {len(existing_links)}")
     else:
         missing = [k for k in REQUIRED_ENV if not os.environ.get(k)]
         if missing:
@@ -221,6 +225,13 @@ def main():
             print(f"  [{p['source']}] {p['title']} | {p['price']} | {p['link']}")
         if len(all_products) > 10:
             print(f"  ... și încă {len(all_products) - 10}")
+        if existing_links is not None:
+            would_be_new = [p for p in all_products if p["link"] not in existing_links]
+            print(f"\nAR FI NOI (ar intra în DB și în email): {len(would_be_new)}")
+            for p in would_be_new[:30]:
+                print(f"  [{p['source']}] {p['title']} | {p['link']}")
+            if len(would_be_new) > 30:
+                print(f"  ... și încă {len(would_be_new) - 30}")
         if failed_sites:
             print(f"\nSite-uri eșuate: {', '.join(failed_sites)}")
             sys.exit(1)
