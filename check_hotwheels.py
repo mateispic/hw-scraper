@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime, timezone
 import os
 import sys
 import requests
@@ -47,35 +48,63 @@ HEADERS = {
 # Supabase
 # ------------------------------------
 
-def get_existing_links():
-    r = requests.get(
-        f"{SUPABASE_URL}/rest/v1/products?select=link",
-        headers=HEADERS
-    )
-    r.raise_for_status()
-    return {row["link"] for row in r.json()}
+PAGE_SIZE = 1000  # Supabase întoarce maxim 1000 de rânduri pe cerere
 
-def insert_products(products):
-    if not products:
-        return
-    inserted = 0
-    seen_links = set()
-    for p in products:
-        if p["link"] in seen_links:
-            continue
-        seen_links.add(p["link"])
-        r = requests.post(
-            f"{SUPABASE_URL}/rest/v1/products",
-            headers=HEADERS,
-            json=p
+def get_existing_links():
+    links = set()
+    offset = 0
+    while True:
+        r = requests.get(
+            f"{SUPABASE_URL}/rest/v1/products?select=link&order=id",
+            headers={**HEADERS, "Range": f"{offset}-{offset + PAGE_SIZE - 1}"}
         )
-        if r.status_code in (200, 201):
-            inserted += 1
-        elif r.status_code == 409:
-            pass  # link deja existent, ignorăm
-        else:
-            print(f"Eroare la inserare {p['link']}: {r.status_code}")
-    print(f"Inserate în Supabase: {inserted}")
+        r.raise_for_status()
+        rows = r.json()
+        links.update(row["link"] for row in rows)
+        if len(rows) < PAGE_SIZE:
+            return links
+        offset += PAGE_SIZE
+
+def upsert_products(products, chunk_size=500):
+    """Inserează produsele noi și actualizează prețul/imaginea/last_seen la cele existente.
+
+    first_seen nu e trimis, deci rămâne data la care produsul a apărut prima dată.
+    last_seen primește aceeași oră pentru toată rularea; dashboard-ul o folosește ca să
+    marcheze drept indisponibile produsele care n-au mai apărut pe site.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    rows, seen = [], set()
+    for p in products:
+        if p["link"] in seen:
+            continue
+        seen.add(p["link"])
+        rows.append({
+            "title": p["title"],
+            "link": p["link"],
+            "price": p["price"],
+            "source": p["source"],
+            "image_url": p["image_url"],
+            "last_seen": now,
+        })
+
+    headers = {**HEADERS, "Prefer": "resolution=merge-duplicates,return=minimal"}
+    saved = 0
+    for i in range(0, len(rows), chunk_size):
+        chunk = rows[i:i + chunk_size]
+        r = requests.post(
+            f"{SUPABASE_URL}/rest/v1/products?on_conflict=link",
+            headers=headers,
+            json=chunk
+        )
+        if r.status_code in (200, 201, 204):
+            saved += len(chunk)
+            continue
+        print(f"Eroare la salvare în Supabase: {r.status_code} {r.text[:300]}")
+        if "42P10" in r.text:
+            print("  Coloana link nu are constrângere unique. Rulează o dată în Supabase SQL Editor:")
+            print("  alter table products add constraint products_link_key unique (link);")
+        r.raise_for_status()
+    print(f"Salvate/actualizate în Supabase: {saved}")
 
 # ------------------------------------
 # Email
@@ -243,9 +272,10 @@ def main():
     new_products = [p for p in all_products if p["link"] not in existing_links]
     print(f"\nProduse noi găsite: {len(new_products)}")
 
+    # toate produsele găsite: cele noi se adaugă, celor existente li se actualizează prețul
+    upsert_products(all_products)
+
     if new_products:
-        insert_products(new_products)
-        print(f"Salvate în Supabase: {len(new_products)}")
         send_email(new_products)
     else:
         print("Nicio noutate.")

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hw-dashboard",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "D:/Proiecte personale/hw-dashboard", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}
