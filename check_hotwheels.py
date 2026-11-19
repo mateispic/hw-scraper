@@ -179,6 +179,8 @@ def fetch_noriel(scraper, page=1):
                 "source": "Noriel",
                 "image_url": img_el["src"] if img_el else None
             })
+    if not products:
+        raise_empty_page(r, soup, len(soup.select("div.product-item")))
     return products
 
 # ------------------------------------
@@ -229,7 +231,19 @@ def fetch_smyk(scraper, page=1):
             "source": "Smyk",
             "image_url": image_url
         })
+    if not products:
+        raise_empty_page(r, soup, len(soup.select("div.complex-product")))
     return products
+
+def raise_empty_page(r, soup, cards_found):
+    """Pagina a venit cu 200 dar fără produse: probabil blocare, redirect sau HTML schimbat."""
+    title = soup.title.get_text(strip=True) if soup.title else None
+    print(f"  0 produse | status: {r.status_code} | url final: {r.url}")
+    print(f"  titlu pagină: {title!r} | carduri găsite: {cards_found} | server: {r.headers.get('server')}")
+    if r.history:
+        print(f"  redirecturi: {' -> '.join(h.headers.get('location', '?') for h in r.history)}")
+    print(f"  început HTML: {r.text[:300]!r}")
+    raise RuntimeError("0 produse pe pagină (vezi detaliile de mai sus)")
 
 # ------------------------------------
 # Main
