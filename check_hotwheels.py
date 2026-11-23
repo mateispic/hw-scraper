@@ -1,7 +1,9 @@
 import argparse
+import atexit
 from datetime import datetime, timezone
 import os
 import sys
+import time
 import requests
 
 import scrapers
@@ -205,8 +207,31 @@ def parse_args():
                         help="limitează numărul de pagini per site")
     return parser.parse_args()
 
+LOCK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".scraper.lock")
+LOCK_MAX_AGE = 60 * 60  # un lock mai vechi de o oră e considerat rămas de la o rulare oprită forțat
+
+
+def acquire_lock():
+    """Împiedică două rulări simultane (ex. widget apăsat în timp ce rulează cea programată),
+    care ar trimite emailul de două ori și ar dubla cererile spre magazine."""
+    try:
+        if time.time() - os.path.getmtime(LOCK_FILE) > LOCK_MAX_AGE:
+            os.remove(LOCK_FILE)
+    except FileNotFoundError:
+        pass
+    try:
+        fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        print("Scraperul rulează deja (altă rulare e în curs). Ies.")
+        sys.exit(0)
+    os.write(fd, str(os.getpid()).encode())
+    os.close(fd)
+    atexit.register(lambda: os.path.exists(LOCK_FILE) and os.remove(LOCK_FILE))
+
+
 def main():
     args = parse_args()
+    acquire_lock()
     dry_run = args.dry_run or os.environ.get("DRY_RUN", "").lower() in ("1", "true", "yes")
 
     existing_links = None

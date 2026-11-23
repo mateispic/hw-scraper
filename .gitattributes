@@ -1,0 +1,3 @@
+# scripturile pentru Termux trebuie sa ramana cu LF, altfel bash pe telefon da eroare
+*.sh text eol=lf
+*.bat text eol=crlf
