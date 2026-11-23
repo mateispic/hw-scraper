@@ -9,6 +9,14 @@ on:
         description: "Dry run (fără Supabase și email)"
         type: boolean
         default: false
+      scrapers:
+        description: "Ce scrapere rulează (separate prin virgulă)"
+        type: string
+        default: "smyk_html,noriel"
+      max_pages:
+        description: "Câte pagini per site (gol = toate; 1 ajunge pentru un test)"
+        type: string
+        default: ""
 
 jobs:
   scrape:
@@ -33,4 +41,6 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
           DRY_RUN: ${{ inputs.dry_run }}
-        run: python check_hotwheels.py
+          # gol la rulările programate -> folosește ce e activat în scrapers/__init__.py
+          SCRAPERS: ${{ inputs.scrapers }}
+        run: python check_hotwheels.py ${{ inputs.max_pages && format('--max-pages {0}', inputs.max_pages) || '' }}
