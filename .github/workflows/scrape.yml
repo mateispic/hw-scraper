@@ -17,6 +17,10 @@ on:
         description: "Câte pagini per site (gol = toate; 1 ajunge pentru un test)"
         type: string
         default: ""
+      page_delay:
+        description: "Secunde de pauză între pagini"
+        type: string
+        default: "15"
 
 jobs:
   scrape:
@@ -43,4 +47,6 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run }}
           # gol la rulările programate -> folosește ce e activat în scrapers/__init__.py
           SCRAPERS: ${{ inputs.scrapers }}
+          # pauză între pagini; la rulările programate 15 secunde
+          PAGE_DELAY: ${{ inputs.page_delay || '15' }}
         run: python check_hotwheels.py ${{ inputs.max_pages && format('--max-pages {0}', inputs.max_pages) || '' }}
